@@ -1,4 +1,4 @@
-import { GOOGLE_CLIENT_ID, SCOPES, SESSION_STORAGE_TOKEN_KEY } from '../config'
+import { GOOGLE_CLIENT_ID, SCOPES, LOCAL_STORAGE_TOKEN_KEY } from '../config'
 import type { TokenClient, TokenResponse } from '../google-identity'
 
 export class NeedsInteractiveAuth extends Error {
@@ -15,9 +15,15 @@ interface StoredToken {
 let tokenClient: TokenClient | null = null
 let current: StoredToken | null = loadStoredToken()
 
+// Stored in localStorage (not sessionStorage) so a token already valid in
+// this browser survives closing/reopening the tab — not just reloads. This
+// doesn't change how long a token is actually valid: GIS's token-client flow
+// never issues a refresh token, so it still expires ~1hr after issuance
+// either way. Beyond that, getValidToken() still falls back to a silent
+// re-auth attempt (and then the Reconnect button) exactly as before.
 function loadStoredToken(): StoredToken | null {
   try {
-    const raw = sessionStorage.getItem(SESSION_STORAGE_TOKEN_KEY)
+    const raw = localStorage.getItem(LOCAL_STORAGE_TOKEN_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as StoredToken
     return parsed.expiresAt > Date.now() ? parsed : null
@@ -29,9 +35,9 @@ function loadStoredToken(): StoredToken | null {
 function storeToken(token: StoredToken | null) {
   current = token
   if (token) {
-    sessionStorage.setItem(SESSION_STORAGE_TOKEN_KEY, JSON.stringify(token))
+    localStorage.setItem(LOCAL_STORAGE_TOKEN_KEY, JSON.stringify(token))
   } else {
-    sessionStorage.removeItem(SESSION_STORAGE_TOKEN_KEY)
+    localStorage.removeItem(LOCAL_STORAGE_TOKEN_KEY)
   }
 }
 

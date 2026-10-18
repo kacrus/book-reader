@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { getValidToken, isSignedIn, signInInteractive } from './auth/googleAuth'
 import { clearConfig, loadConfig } from './localConfig'
 import { SheetsStore } from './sheets/sheetsClient'
@@ -33,15 +33,27 @@ function SignInScreen({ onSignedIn }: { onSignedIn: () => void }) {
 }
 
 export default function App() {
-  const [view, setView] = useState<View>(isSignedIn() ? resolveSignedInView() : 'signin')
+  const [view, setView] = useState<View>(isSignedIn() ? 'loading' : 'signin')
   const [config, setConfig] = useState<AppConfig | null>(loadConfig())
   const [sheetsStore, setSheetsStore] = useState<SheetsStore | null>(null)
   const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES)
   const [activeBook, setActiveBook] = useState<DriveFile | null>(null)
 
-  function resolveSignedInView(): View {
-    return loadConfig() ? 'library' : 'setup'
-  }
+  // Cold start with an already-valid token (e.g. reopening the tab): route
+  // through the same enterLibrary() init as a fresh sign-in, so sheetsStore
+  // actually gets constructed before the library view renders. Previously
+  // this jumped straight to 'library' and only built sheetsStore from the
+  // interactive sign-in/setup handlers — folder browsing worked anyway (it
+  // doesn't need sheetsStore), but opening a book then failed its render
+  // condition and fell through to the sign-in screen, which looked exactly
+  // like being logged out even though the token was still valid.
+  useEffect(() => {
+    if (!isSignedIn()) return
+    const cfg = loadConfig()
+    if (cfg) enterLibrary(cfg)
+    else setView('setup')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function enterLibrary(cfg: AppConfig) {
     setConfig(cfg)
@@ -74,6 +86,14 @@ export default function App() {
     return <SignInScreen onSignedIn={handleSignedIn} />
   }
 
+  if (view === 'loading') {
+    return (
+      <div className="centered-screen">
+        <p className="muted">Loading…</p>
+      </div>
+    )
+  }
+
   if (view === 'setup') {
     return <FirstRunSetup onComplete={enterLibrary} />
   }
@@ -90,25 +110,35 @@ export default function App() {
     )
   }
 
-  if (view === 'library' && config) {
+  if (view === 'library' && config && sheetsStore) {
     return (
-      <div className="library-screen">
+      <div className="library-page">
         <div className="library-header">
           <h1>Library</h1>
           <button className="secondary" onClick={handleChangeLibrary}>
             Change library
           </button>
         </div>
-        <FolderTree
-          rootFolderId={config.rootFolderId}
-          onOpenBook={(file) => {
-            setActiveBook(file)
-            setView('reading')
-          }}
-        />
+        <div className="library-content">
+          <FolderTree
+            rootFolderId={config.rootFolderId}
+            sheetsStore={sheetsStore}
+            onOpenBook={(file) => {
+              setActiveBook(file)
+              setView('reading')
+            }}
+          />
+        </div>
       </div>
     )
   }
 
-  return <SignInScreen onSignedIn={handleSignedIn} />
+  // Reachable only for a transient render where e.g. 'reading' is set but
+  // activeBook/sheetsStore haven't landed yet — never means "logged out",
+  // so show a neutral loading state rather than bouncing to sign-in.
+  return (
+    <div className="centered-screen">
+      <p className="muted">Loading…</p>
+    </div>
+  )
 }
