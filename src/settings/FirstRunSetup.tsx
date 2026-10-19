@@ -5,6 +5,7 @@ import { createSpreadsheet } from '../sheets/sheetsClient'
 import { moveFileToFolder } from '../drive/driveClient'
 import { pickFolder, pickSpreadsheet } from '../picker/googlePicker'
 import { saveConfig } from '../localConfig'
+import { FolderIcon, SheetIcon } from '../icons'
 import type { PickerDocument } from '../google-identity'
 import type { AppConfig } from '../types'
 
@@ -74,7 +75,11 @@ export function FirstRunSetup({ onComplete }: { onComplete: (config: AppConfig) 
             <button className="secondary" onClick={handleChooseFolder} disabled={busy}>
               {folder ? 'Change folder' : 'Choose folder'}
             </button>
-            {folder && <span className="picked-name">📁 {folder.name}</span>}
+            {folder && (
+              <span className="picked-name">
+                <FolderIcon size={14} /> {folder.name}
+              </span>
+            )}
           </div>
         </section>
 
@@ -101,7 +106,11 @@ export function FirstRunSetup({ onComplete }: { onComplete: (config: AppConfig) 
               <button className="secondary" onClick={handleChooseSpreadsheet} disabled={busy}>
                 {spreadsheet ? 'Change spreadsheet' : 'Choose spreadsheet'}
               </button>
-              {spreadsheet && <span className="picked-name">📊 {spreadsheet.name}</span>}
+              {spreadsheet && (
+                <span className="picked-name">
+                  <SheetIcon size={14} /> {spreadsheet.name}
+                </span>
+              )}
             </div>
           )}
         </section>

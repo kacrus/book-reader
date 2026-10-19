@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MoonIcon, SunIcon } from '../icons'
 import { FONT_OPTIONS, formatDuration, formatLogDate } from '../types'
 import type { Preferences, ReadingLogEntry } from '../types'
 
@@ -10,16 +11,32 @@ const LINE_SPACING_MIN = 1.0
 const LINE_SPACING_MAX = 2.4
 const LINE_SPACING_STEP = 0.2
 
+const PAGE_WIDTH_MIN = 400
+const PAGE_WIDTH_MAX = 1200
+const PAGE_WIDTH_STEP = 80
+
+const SIDE_MARGIN_MIN = 0
+const SIDE_MARGIN_MAX = 200
+const SIDE_MARGIN_STEP = 20
+
 export function ReaderSettings({
   preferences,
   onChange,
   onClose,
   readingLog,
+  pageWidth,
+  onChangePageWidth,
+  sideMargin,
+  onChangeSideMargin,
 }: {
   preferences: Preferences
   onChange: (p: Preferences) => void
   onClose: () => void
   readingLog: ReadingLogEntry[]
+  pageWidth: number
+  onChangePageWidth: (delta: number) => void
+  sideMargin: number
+  onChangeSideMargin: (delta: number) => void
 }) {
   const [showHistory, setShowHistory] = useState(false)
   const totalSeconds = readingLog.reduce((sum, e) => sum + e.seconds, 0)
@@ -58,13 +75,15 @@ export function ReaderSettings({
               className={preferences.theme === 'light' ? 'active' : ''}
               onClick={() => setTheme('light')}
             >
-              ☀️ Light
+              <SunIcon size={15} />
+              Light
             </button>
             <button
               className={preferences.theme === 'dark' ? 'active' : ''}
               onClick={() => setTheme('dark')}
             >
-              🌙 Dark
+              <MoonIcon size={15} />
+              Dark
             </button>
           </div>
         </div>
@@ -112,6 +131,38 @@ export function ReaderSettings({
               onClick={() => setLineSpacing(LINE_SPACING_STEP)}
               disabled={preferences.lineSpacing >= LINE_SPACING_MAX}
             >
+              +
+            </button>
+          </div>
+        </div>
+
+        <div className="settings-row">
+          <span>
+            Page width
+            <span className="settings-hint">this device</span>
+          </span>
+          <div className="settings-control">
+            <button onClick={() => onChangePageWidth(-PAGE_WIDTH_STEP)} disabled={pageWidth <= PAGE_WIDTH_MIN}>
+              −
+            </button>
+            <span className="settings-value">{pageWidth}px</span>
+            <button onClick={() => onChangePageWidth(PAGE_WIDTH_STEP)} disabled={pageWidth >= PAGE_WIDTH_MAX}>
+              +
+            </button>
+          </div>
+        </div>
+
+        <div className="settings-row">
+          <span>
+            Margins
+            <span className="settings-hint">this device</span>
+          </span>
+          <div className="settings-control">
+            <button onClick={() => onChangeSideMargin(-SIDE_MARGIN_STEP)} disabled={sideMargin <= SIDE_MARGIN_MIN}>
+              −
+            </button>
+            <span className="settings-value">{sideMargin}px</span>
+            <button onClick={() => onChangeSideMargin(SIDE_MARGIN_STEP)} disabled={sideMargin >= SIDE_MARGIN_MAX}>
               +
             </button>
           </div>

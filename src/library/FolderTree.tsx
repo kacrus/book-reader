@@ -3,7 +3,8 @@ import { getValidToken, NeedsInteractiveAuth } from '../auth/googleAuth'
 import { ReconnectButton } from '../auth/ReconnectButton'
 import { listFolder } from '../drive/driveClient'
 import type { SheetsStore } from '../sheets/sheetsClient'
-import { BookIcon, ChevronIcon, FolderIcon } from './icons'
+import { ChevronIcon, FolderIcon } from '../icons'
+import { BookTile } from './BookTile'
 import { formatBookTitle, formatDuration, isEpub, isFolder } from '../types'
 import type { DriveFile } from '../types'
 
@@ -49,12 +50,13 @@ function FolderContents({
           return <FolderItem key={file.id} file={file} sheetsStore={sheetsStore} onOpenBook={onOpenBook} />
         }
         if (!isEpub(file)) return null
+        const title = formatBookTitle(file.name)
         const totalSeconds = sheetsStore.getTotalReadingSeconds(file.id)
         return (
           <li key={file.id}>
             <button className="book-item" onClick={() => onOpenBook(file)}>
-              <BookIcon />
-              <span className="item-label">{formatBookTitle(file.name)}</span>
+              <BookTile title={title} />
+              <span className="item-label">{title}</span>
               {totalSeconds > 0 && <span className="book-meta">{formatDuration(totalSeconds)}</span>}
             </button>
           </li>

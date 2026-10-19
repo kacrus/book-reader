@@ -7,6 +7,8 @@ import { ReconnectButton } from '../auth/ReconnectButton'
 import { downloadFile } from '../drive/driveClient'
 import { ReaderSettings } from './ReaderSettings'
 import { ConflictDialog } from './ConflictDialog'
+import { ArrowLeftIcon, SettingsIcon } from '../icons'
+import { loadDeviceSettings, saveDeviceSettings } from '../deviceSettings'
 import type { SheetsStore } from '../sheets/sheetsClient'
 import { FONT_OPTIONS, formatBookTitle, localDateString } from '../types'
 import type { DriveFile, Preferences, ProgressRow } from '../types'
@@ -14,6 +16,12 @@ import type { DriveFile, Preferences, ProgressRow } from '../types'
 const READING_TIME_FLUSH_MS = 60_000
 
 const SAVE_DEBOUNCE_MS = 2500
+
+const SIDE_MARGIN_MIN = 0
+const SIDE_MARGIN_MAX = 200
+
+const PAGE_WIDTH_MIN = 400
+const PAGE_WIDTH_MAX = 1200
 
 // line-height and font-family are inherited: a !important rule on <body>
 // only affects elements that have no rule of their own, which doesn't help
@@ -90,6 +98,34 @@ export function EpubReader({
   // log (read fresh from sheetsStore on each render, not memoized) reflects
   // a just-completed flush.
   const [, setLogVersion] = useState(0)
+  const [{ pageWidth, sideMargin }, setDeviceSettingsState] = useState(loadDeviceSettings)
+
+  function changePageWidth(delta: number) {
+    const next = Math.max(PAGE_WIDTH_MIN, Math.min(PAGE_WIDTH_MAX, pageWidth + delta))
+    const settings = { pageWidth: next, sideMargin }
+    setDeviceSettingsState(settings)
+    saveDeviceSettings(settings)
+  }
+
+  function changeSideMargin(delta: number) {
+    const next = Math.max(SIDE_MARGIN_MIN, Math.min(SIDE_MARGIN_MAX, sideMargin + delta))
+    const settings = { pageWidth, sideMargin: next }
+    setDeviceSettingsState(settings)
+    saveDeviceSettings(settings)
+  }
+
+  // Changing width/padding doesn't fire a window resize event, and epub.js's
+  // own resize() proved unreliable at picking up a container that changed
+  // size without the window itself resizing. Remounting against the same
+  // already-loaded book (no re-download) is slower but actually correct —
+  // the fresh rendition measures its container at creation time regardless.
+  useEffect(() => {
+    if (!renditionRef.current) return // nothing mounted yet on initial render
+    const anchorCfi = renditionRef.current.location?.start?.cfi ?? baselineCfiRef.current ?? undefined
+    const rendition = mountRendition()
+    rendition?.display(anchorCfi).then(() => updateChapterTitle(rendition.location))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageWidth, sideMargin])
 
   useEffect(() => {
     load()
@@ -150,6 +186,33 @@ export function EpubReader({
     }
   }
 
+  /** Creates (or re-creates) the rendition against containerRef, measuring
+   * whatever size/padding it currently has. Used both for the initial open
+   * and to pick up a container size change (e.g. the margin setting) that
+   * doesn't come with a window resize event for epub.js to react to. */
+  function mountRendition(): Rendition | null {
+    const book = bookRef.current
+    if (!book || !containerRef.current) return null
+
+    renditionRef.current?.destroy()
+
+    const rendition = book.renderTo(containerRef.current, {
+      width: '100%',
+      height: '100%',
+      flow: 'scrolled-doc',
+    })
+    renditionRef.current = rendition
+    rendition.hooks.content.register((contents: Contents) => {
+      applyTypography(contents, preferencesRef.current)
+    })
+    applyTheme(preferencesRef.current)
+    rendition.on('relocated', (location: Location) => {
+      updateChapterTitle(location)
+      scheduleSave(location.start.cfi)
+    })
+    return rendition
+  }
+
   async function load() {
     setError(null)
     setNeedsAuth(false)
@@ -160,31 +223,16 @@ export function EpubReader({
 
       const book = ePub(buffer)
       bookRef.current = book
-
-      if (!containerRef.current) return
-      const rendition = book.renderTo(containerRef.current, {
-        width: '100%',
-        height: '100%',
-        flow: 'scrolled-doc',
-      })
-      renditionRef.current = rendition
-      rendition.hooks.content.register((contents: Contents) => {
-        applyTypography(contents, preferencesRef.current)
-      })
-      applyTheme(preferences)
-
       navigationRef.current = await book.loaded.navigation
-
       await book.ready
+
       const progress = await sheetsStore.getProgress(file.id)
       baselineCfiRef.current = progress?.cfi ?? null
+
+      const rendition = mountRendition()
+      if (!rendition) return
       await rendition.display(progress?.cfi)
       updateChapterTitle(rendition.location)
-
-      rendition.on('relocated', (location: Location) => {
-        updateChapterTitle(location)
-        scheduleSave(location.start.cfi)
-      })
 
       setLoading(false)
     } catch (err) {
@@ -281,14 +329,17 @@ export function EpubReader({
   return (
     <div className="reader-screen">
       <div className="reader-toolbar">
-        <button onClick={onClose}>← Library</button>
+        <button className="toolbar-button" onClick={onClose}>
+          <ArrowLeftIcon size={16} />
+          <span>Library</span>
+        </button>
         <div className="toolbar-title">
           <span className="book-title">{formatBookTitle(file.name)}</span>
           {chapterTitle && <span className="chapter-title">{chapterTitle}</span>}
         </div>
         <div className="reader-controls">
-          <button onClick={toggleSettings} aria-label="Reader settings">
-            ⚙️
+          <button className="toolbar-button icon-only" onClick={toggleSettings} aria-label="Reader settings">
+            <SettingsIcon size={17} />
           </button>
           {showSettings && (
             <ReaderSettings
@@ -296,6 +347,10 @@ export function EpubReader({
               onChange={onChangePreferences}
               onClose={() => setShowSettings(false)}
               readingLog={sheetsStore.getReadingLog(file.id)}
+              pageWidth={pageWidth}
+              onChangePageWidth={changePageWidth}
+              sideMargin={sideMargin}
+              onChangeSideMargin={changeSideMargin}
             />
           )}
         </div>
@@ -308,7 +363,12 @@ export function EpubReader({
       <div
         className="reader-viewport"
         ref={containerRef}
-        style={{ background: preferences.theme === 'dark' ? DARK_BG : LIGHT_BG }}
+        style={{
+          background: preferences.theme === 'dark' ? DARK_BG : LIGHT_BG,
+          maxWidth: pageWidth,
+          paddingLeft: sideMargin,
+          paddingRight: sideMargin,
+        }}
       />
 
       {conflict && (

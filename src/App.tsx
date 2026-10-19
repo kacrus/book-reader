@@ -5,6 +5,7 @@ import { SheetsStore } from './sheets/sheetsClient'
 import { FirstRunSetup } from './settings/FirstRunSetup'
 import { FolderTree } from './library/FolderTree'
 import { EpubReader } from './reader/EpubReader'
+import { LogoIcon } from './icons'
 import { DEFAULT_PREFERENCES } from './types'
 import type { AppConfig, DriveFile, Preferences, View } from './types'
 
@@ -20,7 +21,9 @@ function SignInScreen({ onSignedIn }: { onSignedIn: () => void }) {
   return (
     <div className="centered-screen">
       <div className="card signin-card">
-        <span className="app-logo">📚</span>
+        <span className="app-logo">
+          <LogoIcon size={32} />
+        </span>
         <h1>Book Reader</h1>
         <p className="muted">Read your EPUBs straight from Google Drive.</p>
         <button className="primary" onClick={handleClick}>
@@ -114,7 +117,12 @@ export default function App() {
     return (
       <div className="library-page">
         <div className="library-header">
-          <h1>Library</h1>
+          <div className="library-brand">
+            <span className="app-logo small">
+              <LogoIcon size={18} />
+            </span>
+            <h1>Library</h1>
+          </div>
           <button className="secondary" onClick={handleChangeLibrary}>
             Change library
           </button>
